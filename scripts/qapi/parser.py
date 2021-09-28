@@ -18,8 +18,20 @@ from collections import OrderedDict
 import os
 import re
 
-from .error import QAPIParseError, QAPISemError
+from .error import QAPISemError, QAPISourceError
 from .source import QAPISourceInfo
+
+
+class QAPIParseError(QAPISourceError):
+    """Error class for all QAPI schema parsing errors."""
+    def __init__(self, parser, msg):
+        col = 1
+        for ch in parser.src[parser.line_pos:parser.pos]:
+            if ch == '\t':
+                col = (col + 7) % 8 + 1
+            else:
+                col += 1
+        super().__init__(parser.info, msg, col)
 
 
 class QAPISchemaParser:
@@ -119,26 +131,28 @@ class QAPISchemaParser:
 
         return QAPISchemaParser(incl_fname, previously_included, info)
 
+    def _check_pragma_list_of_str(self, name, value, info):
+        if (not isinstance(value, list)
+                or any([not isinstance(elt, str) for elt in value])):
+            raise QAPISemError(
+                info,
+                "pragma %s must be a list of strings" % name)
+
     def _pragma(self, name, value, info):
         if name == 'doc-required':
             if not isinstance(value, bool):
                 raise QAPISemError(info,
                                    "pragma 'doc-required' must be boolean")
             info.pragma.doc_required = value
-        elif name == 'returns-whitelist':
-            if (not isinstance(value, list)
-                    or any([not isinstance(elt, str) for elt in value])):
-                raise QAPISemError(
-                    info,
-                    "pragma returns-whitelist must be a list of strings")
-            info.pragma.returns_whitelist = value
-        elif name == 'name-case-whitelist':
-            if (not isinstance(value, list)
-                    or any([not isinstance(elt, str) for elt in value])):
-                raise QAPISemError(
-                    info,
-                    "pragma name-case-whitelist must be a list of strings")
-            info.pragma.name_case_whitelist = value
+        elif name == 'command-name-exceptions':
+            self._check_pragma_list_of_str(name, value, info)
+            info.pragma.command_name_exceptions = value
+        elif name == 'command-returns-exceptions':
+            self._check_pragma_list_of_str(name, value, info)
+            info.pragma.command_returns_exceptions = value
+        elif name == 'member-name-exceptions':
+            self._check_pragma_list_of_str(name, value, info)
+            info.pragma.member_name_exceptions = value
         else:
             raise QAPISemError(info, "unknown pragma '%s'" % name)
 
@@ -236,9 +250,9 @@ class QAPISchemaParser:
         if self.tok == ']':
             self.accept()
             return expr
-        if self.tok not in "{['tfn":
+        if self.tok not in "{['tf":
             raise QAPIParseError(
-                self, "expected '{', '[', ']', string, boolean or 'null'")
+                self, "expected '{', '[', ']', string, or boolean")
         while True:
             expr.append(self.get_expr(True))
             if self.tok == ']':
@@ -257,12 +271,12 @@ class QAPISchemaParser:
         elif self.tok == '[':
             self.accept()
             expr = self.get_values()
-        elif self.tok in "'tfn":
+        elif self.tok in "'tf":
             expr = self.val
             self.accept()
         else:
             raise QAPIParseError(
-                self, "expected '{', '[', string, boolean or 'null'")
+                self, "expected '{', '[', string, or boolean")
         return expr
 
     def get_doc(self, info):

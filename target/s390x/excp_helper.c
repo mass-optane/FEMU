@@ -29,7 +29,6 @@
 #include "exec/address-spaces.h"
 #include "tcg_s390x.h"
 #ifndef CONFIG_USER_ONLY
-#include "sysemu/sysemu.h"
 #include "hw/s390x/s390_flic.h"
 #include "hw/boards.h"
 #endif
@@ -156,12 +155,16 @@ bool s390_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
         !address_space_access_valid(&address_space_memory, raddr,
                                     TARGET_PAGE_SIZE, access_type,
                                     MEMTXATTRS_UNSPECIFIED)) {
+        MachineState *ms = MACHINE(qdev_get_machine());
         qemu_log_mask(CPU_LOG_MMU,
                       "%s: raddr %" PRIx64 " > ram_size %" PRIx64 "\n",
-                      __func__, (uint64_t)raddr, (uint64_t)ram_size);
+                      __func__, (uint64_t)raddr, (uint64_t)ms->ram_size);
         excp = PGM_ADDRESSING;
         tec = 0; /* unused */
     }
+
+    env->tlb_fill_exc = excp;
+    env->tlb_fill_tec = tec;
 
     if (!excp) {
         qemu_log_mask(CPU_LOG_MMU,
@@ -633,4 +636,4 @@ void HELPER(monitor_call)(CPUS390XState *env, uint64_t monitor_code,
     }
 }
 
-#endif /* CONFIG_USER_ONLY */
+#endif /* !CONFIG_USER_ONLY */
