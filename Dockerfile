@@ -20,7 +20,7 @@ RUN apt-get update \
 # building and installing FEMU
 ADD femu.tar femu-build 
 RUN cd femu-build \
-    && ./configure --enable-kvm --target-list=x86_64-softmmu --disable-git-update --disable-werror --disable-strip --prefix=$FEMU_PREFIX \
+    && ./configure --enable-kvm --target-list=x86_64-softmmu --disable-werror --disable-strip --prefix=$FEMU_PREFIX \
     && make -j$(nproc) && make install \
     && cd .. && rm -rf femu-build
 RUN setcap cap_ipc_lock=eip $(realpath $(which qemu-system-x86_64)) && getcap $(realpath $(which qemu-system-x86_64)) 
