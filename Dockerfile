@@ -24,6 +24,16 @@ RUN cd femu-build \
     && make -j$(nproc) && make install \
     && cd .. && rm -rf femu-build
 RUN setcap cap_ipc_lock=eip $(realpath $(which qemu-system-x86_64)) && getcap $(realpath $(which qemu-system-x86_64)) 
+# dependencies for ndctl
+RUN apt-get update \
+    && apt-get install -y autoconf automake autotools-dev libtool pkg-config libkmod-dev libudev-dev libjson-c-dev libkeyutils-dev uuid-dev asciidoctor bash-completion \
+    && rm -rf /var/lib/apt/lists/*  
+# building ndctl
+RUN git clone --recurse-submodules https://github.com/pmem/ndctl -b cxl-2.0v3 \
+    && cd ndctl \
+    && ./autogen.sh && ./configure CFLAGS="-g -O2" --with-systemd=no --enable-static=yes --prefix=/usr --sysconfdir=/etc --libdir=/usr/lib \
+    && make -j$(nproc) && make install \
+    && cd .. && rm -rf ndctl
 CMD ["bash"]
 
 # make docker run act as if we are directly executing qemu-system-x86_64
